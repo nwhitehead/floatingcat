@@ -1,0 +1,40 @@
+Floating Cat
+
+A catalog of floating point software and hardware implementations.
+
+Copyright 2009 Nathan Whitehead
+Released under the GNU General Public License v3 or any later version
+
+CONTENTS
+    Hardware
+        Methodology notes
+        Stack
+        Integer addition
+        Normalization
+        Floating point addition
+
+Hardware : Methodology notes
+
+All the hardware designs are done in MyHDL and extracted to Verilog or
+VHDL.  This lets us use Python to do test case generation and
+verification.  For numerical applications, this is a big win.  Many of
+the test case generation algorithms are complicated and probably
+impossible to express in Verilog directly.  I'm a fan of unit testing
+and having powerful regression tests to find errors.
+
+The cost is that you have to take some time to understand MyHDL syntax
+and Python before you can change the RTL implementations.  Note that
+you don't have to understand MyHDL and Python to use the RTL itself,
+it's only if you want to make changes and have them be integrated into
+the project and reverify the result using the Python testbench.
+
+If you have not heard of MyHDL, visit http://www.myhdl.org
+
+Both Python and MyHDL are not hard to learn.  For most FPGA projects
+it is probably overkill to use MyHDL and do full Python unittests for
+every little detail, since you can try things in the Verilog simulator
+and on the FPGA to quickly see if it works.  MyHDL and Python really
+shine when manual inspection isn't enough to verify a module.  For
+numeric development, you really need a good testing setup; Python
+is ideal.
+
