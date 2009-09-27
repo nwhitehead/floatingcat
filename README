@@ -7,11 +7,26 @@ Released under the GNU General Public License v3 or any later version
 
 CONTENTS
     Hardware
+	Goals
         Methodology notes
         Stack
-        Integer addition
         Normalization
+	Rounding
         Floating point addition
+
+Hardware : Goals
+
+The goal of this catalog on the hardware side is to be a nice
+collection of usable blocks that can be connected together to quickly
+create interesting FPGA designs that involve numerical processing.
+Floating point is already hard enough to use, so the number one design
+goal of the catalog is to make things work correctly all the time,
+even at a small cost in performance.  The goal of each block is to be
+as easy to use as possible and reusable in larger designs for
+different purposes.
+
+My personal goal is to experiment with new architectures for high
+performance floating point on FPGAs.
 
 Hardware : Methodology notes
 
@@ -38,3 +53,6 @@ shine when manual inspection isn't enough to verify a module.  For
 numeric development, you really need a good testing setup; Python
 is ideal.
 
+To simplify unit testing in Python, I use the py.test tool.  To get
+this tool, on Ubuntu install package "python-codespeak-lib".  
+For other platforms see http://codespeak.net/py/dist/test/
