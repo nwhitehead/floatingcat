@@ -1,5 +1,6 @@
 from myhdl import *
 import sys
+from combinations import combinations
 
 # LFSR size limits
 MIN_LFSR_WIDTH = 3
@@ -13,6 +14,7 @@ TESTED_WIDTHS_PERIOD = range(MIN_LFSR_WIDTH,
                              min(MAX_LFSR_WIDTH, 
                                  MAX_TESTED_LFSR_WIDTH) + 1)
 TESTED_WIDTHS_NONLOCKING = range(MIN_LFSR_WIDTH, MAX_LFSR_WIDTH + 1)
+
 
 def test_period():
     '''Test for correct period'''
@@ -31,17 +33,22 @@ def test_period():
             clk.next = 0
             yield delay(10)
 
-    for non_locking in [True, False]:
-        for reverse in [True, False]:
-            for width in TESTED_WIDTHS_PERIOD:
-                clk = Signal(bool(0))
-                d = Signal(intbv(0)[width:])
-                lfsr = LFSR(clk, d, width=width, 
-                    non_locking=non_locking, reverse=reverse)
-                chk = test(clk, d, width)
-                print 'period ', width, non_locking, reverse
-                sim = Simulation(lfsr, chk)
-                sim.run(quiet=1)
+    for reversible, non_locking, reverse, width in 
+            combinations([True, False], [True, False], 
+                         [True, False], TESTED_WIDTHS_PERIOD)
+        clk = Signal(bool(0))
+        d = Signal(intbv(0)[width:])
+        dir = Signal(bool(0))
+        if reversible:
+            lfsr = reversible_LFSR(clk, d, dir, width=width, 
+                non_locking=non_locking)
+        else:
+            lfsr = LFSR(clk, d, width=width, 
+                non_locking=non_locking, reverse=reverse)
+        chk = test(clk, d, width)
+        print 'period ', width, non_locking, reverse
+        sim = Simulation(lfsr, chk)
+        sim.run(quiet=1)
 
 def test_nonlocking():
     '''Test for lockups'''
