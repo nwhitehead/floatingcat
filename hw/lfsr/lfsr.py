@@ -33,20 +33,26 @@ def test_period():
             clk.next = 0
             yield delay(10)
 
-    for reversible, non_locking, reverse, width in 
-            combinations([True, False], [True, False], 
-                         [True, False], TESTED_WIDTHS_PERIOD)
+    for non_locking, reverse, width in combinations(
+        [True, False], [True, False], TESTED_WIDTHS_PERIOD):
         clk = Signal(bool(0))
         d = Signal(intbv(0)[width:])
-        dir = Signal(bool(0))
-        if reversible:
-            lfsr = reversible_LFSR(clk, d, dir, width=width, 
-                non_locking=non_locking)
-        else:
-            lfsr = LFSR(clk, d, width=width, 
-                non_locking=non_locking, reverse=reverse)
+        lfsr = LFSR(clk, d, width=width, 
+            non_locking=non_locking, reverse=reverse)
         chk = test(clk, d, width)
         print 'period ', width, non_locking, reverse
+        sim = Simulation(lfsr, chk)
+        sim.run(quiet=1)
+
+    for non_locking, direction, width in combinations(
+        [True, False], [0, 1], TESTED_WIDTHS_PERIOD):
+        clk = Signal(bool(0))
+        d = Signal(intbv(0)[width:])
+        dir = Signal(bool(direction))
+        lfsr = reversible_LFSR(clk, d, dir, width=width, 
+            non_locking=non_locking)
+        chk = test(clk, d, width)
+        print 'period2 ', width, non_locking, direction
         sim = Simulation(lfsr, chk)
         sim.run(quiet=1)
 
@@ -71,16 +77,28 @@ def test_nonlocking():
         assert d.val != intbv(0)[width:]
         raise StopSimulation
 
-    for width in TESTED_WIDTHS_NONLOCKING:
-        for reverse in [True, False]:
-            clk = Signal(bool(0))
-            d = Signal(intbv(0)[width:])
-            lfsr = LFSR(clk, d, width=width, 
-                non_locking=True, reverse=reverse)
-            chk = test(clk, d, width)
-            print 'nonlocking ', width, reverse
-            sim = Simulation(lfsr, chk)
-            sim.run(quiet=1)
+    for reverse, width in combinations(
+        [True, False], TESTED_WIDTHS_NONLOCKING):
+        clk = Signal(bool(0))
+        d = Signal(intbv(0)[width:])
+        lfsr = LFSR(clk, d, width=width, 
+            non_locking=True, reverse=reverse)
+        chk = test(clk, d, width)
+        print 'nonlocking ', width, reverse
+        sim = Simulation(lfsr, chk)
+        sim.run(quiet=1)
+
+    for direction, width in combinations(
+        [0, 1], TESTED_WIDTHS_NONLOCKING):
+        clk = Signal(bool(0))
+        d = Signal(intbv(0)[width:])
+        dir = Signal(bool(direction))
+        lfsr = reversible_LFSR(clk, d, dir, width=width, 
+            non_locking=True)
+        chk = test(clk, d, width)
+        print 'nonlocking2 ', width, direction
+        sim = Simulation(lfsr, chk)
+        sim.run(quiet=1)
 
 def test_reverse():
     '''Test for correct reversing'''
