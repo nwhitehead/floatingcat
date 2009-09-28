@@ -4,17 +4,20 @@ from combinations import combinations
 
 # LFSR size limits
 MIN_LFSR_WIDTH = 3
-MAX_LFSR_WIDTH = 16
+MAX_LFSR_WIDTH = 64
 
 # Testing limits
 MAX_TESTED_LFSR_WIDTH = 10
 # MAX_TESTED_LFSR_WIDTH can be increased to verify larger sizes,
 # but testing time increases exponentially.
 TESTED_WIDTHS_PERIOD = range(MIN_LFSR_WIDTH, 
-                             min(MAX_LFSR_WIDTH, 
-                                 MAX_TESTED_LFSR_WIDTH) + 1)
-TESTED_WIDTHS_NONLOCKING = range(MIN_LFSR_WIDTH, MAX_LFSR_WIDTH + 1)
+                             MAX_TESTED_LFSR_WIDTH + 1)
+TESTED_WIDTHS = range(MIN_LFSR_WIDTH, MAX_LFSR_WIDTH + 1)
+TESTED_WIDTHS_REVERSIBLE = range(MIN_LFSR_WIDTH, 
+                                 MAX_TESTED_LFSR_WIDTH + 1)
+TESTED_LEN_REVERSIBLE = range(3, 20)
 
+# This file uses py.test for unit testing
 
 def test_period():
     '''Test for correct period'''
@@ -77,8 +80,7 @@ def test_nonlocking():
         assert d.val != intbv(0)[width:]
         raise StopSimulation
 
-    for reverse, width in combinations(
-        [True, False], TESTED_WIDTHS_NONLOCKING):
+    for reverse, width in combinations([True, False], TESTED_WIDTHS):
         clk = Signal(bool(0))
         d = Signal(intbv(0)[width:])
         lfsr = LFSR(clk, d, width=width, 
@@ -88,8 +90,7 @@ def test_nonlocking():
         sim = Simulation(lfsr, chk)
         sim.run(quiet=1)
 
-    for direction, width in combinations(
-        [0, 1], TESTED_WIDTHS_NONLOCKING):
+    for direction, width in combinations([0, 1], TESTED_WIDTHS):
         clk = Signal(bool(0))
         d = Signal(intbv(0)[width:])
         dir = Signal(bool(direction))
@@ -116,20 +117,49 @@ def test_reverse():
         assert seq0 == seq1
         raise StopSimulation
 
-    for non_locking in [True, False]:
-        for width in TESTED_WIDTHS_PERIOD:
-            clk = Signal(bool(0))
-            d0 = Signal(intbv(0)[width:])
-            d1 = Signal(intbv(0)[width:])
-            lfsr0 = LFSR(clk, d0, width=width, 
-                non_locking=non_locking, reverse=False)
-            lfsr1 = LFSR(clk, d1, width=width, 
-                non_locking=non_locking, reverse=True)
-            chk = test(clk, d0, d1, width)
-            print 'reverse ', width, non_locking
-            sim = Simulation(lfsr0, lfsr1, chk)
-            sim.run(quiet=1)
+    for non_locking, width in combinations(
+        [True, False], TESTED_WIDTHS_PERIOD):
+        clk = Signal(bool(0))
+        d0 = Signal(intbv(0)[width:])
+        d1 = Signal(intbv(0)[width:])
+        lfsr0 = LFSR(clk, d0, width=width, 
+            non_locking=non_locking, reverse=False)
+        lfsr1 = LFSR(clk, d1, width=width, 
+            non_locking=non_locking, reverse=True)
+        chk = test(clk, d0, d1, width)
+        print 'reverse ', width, non_locking
+        sim = Simulation(lfsr0, lfsr1, chk)
+        sim.run(quiet=1)
 
+def test_reversible():
+    '''Test for correct reversing behavior in reversible lfsrs'''
+    def test(clk, d, dir, width, l):
+        for i in range(l):
+            v0 = d.val
+            clk.next = 0
+            yield delay(10)
+            clk.next = 1
+            yield delay(10)
+        clk.next = 0
+        dir.next = not dir
+        yield delay(10)
+        clk.next = 1
+        yield delay(10)
+        assert v0 == d.val
+        raise StopSimulation
+
+    for non_locking, direction, width, l in combinations(
+        [True, False], [0, 1], 
+        TESTED_WIDTHS_REVERSIBLE, TESTED_LEN_REVERSIBLE):
+        clk = Signal(bool(0))
+        d = Signal(intbv(0)[width:])
+        dir = Signal(bool(direction))
+        lfsr = reversible_LFSR(clk, d, dir, width=width, 
+            non_locking=non_locking)
+        chk = test(clk, d, dir, width, l)
+        print 'reversible ', width, non_locking, direction, l
+        sim = Simulation(lfsr, chk)
+        sim.run(quiet=1)
 
 '''Maximal length LFSR tap table
 
