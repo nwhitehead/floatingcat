@@ -28,20 +28,25 @@ class model:
         self.stk = []
         self.depth = depth
         self.width = width
-    def push(self, data):
+    def do_op(self, op, data):
         assert len(data) == self.width
-        self.stk.append(data)
-        assert len(self.stk) <= depth
-    def store(self, data):
-        assert len(data) == self.width
-        self.stk[0] = data
-        assert len(self.stk) <= depth
-    def pop(self, data):
-        self.stk = self.stk[:len(self.stk) - 1]
-        self.stk[0] = data
+        if op == t_op.NOP: pass
+        elif op == t_op.POP:
+            self.stk = self.stk[:len(self.stk) - 1]
+            self.stk[0] = data
+        elif op == t_op.PUSH:
+            self.stk.append(data)
+        elif op == t_op.STORE:
+            self.stk[0] = data
         assert len(self.stk) <= depth
     def douts(self):
         return self.stk[0], self.stk[1]
+    def do_ops(self, ops):
+        for x in ops:
+            op, data = x
+            self.do_op(op, data)
+    def generate_random_legal_ops(self, num=10):
+        
 
 def test_seq():
     '''Test legal sequences of operations against model'''
