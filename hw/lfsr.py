@@ -1,3 +1,15 @@
+'''
+Linear Feedback Shift Register
+
+Includes simple lfsr module that cycles through bit patterns.
+Can be configured to many widths, option to avoid locking patterns
+that may occur due to glitches.  Can be configured to go in reverse.
+
+Also includes reversible lfsr counter that has a direction
+input so it can count forwards or backwards on every clock cycle.
+
+'''
+
 from myhdl import *
 import sys
 from combinations import combinations

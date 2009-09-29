@@ -1,3 +1,11 @@
+'''
+Hardware stack
+
+This stack model can push/pop one item every clock cycle, and overwrites
+the data value on the top of the stack every cycle.
+
+'''
+
 from myhdl import *
 import sys
 import random
