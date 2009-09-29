@@ -12,6 +12,7 @@ input so it can count forwards or backwards on every clock cycle.
 
 from myhdl import *
 import sys
+import os
 from combinations import combinations
 
 # LFSR size limits
@@ -342,6 +343,13 @@ def LFSR(clk, D, width=4, non_locking=False, reverse=False):
             D.next[width - 1] = R
 
     return logic, lfsrbit_inst
+
+def LFSR_v(clk, D, width=4, non_locking=False, reverse=False):
+    toVerilog(LFSR, clk, D, width, non_locking, reverse)
+    cmd = "iverilog -o lfsrv LFSR.v tb_LFSR.v"
+    os.system(cmd)
+    cmd = "vvp -m myhdl lfsrv"
+    return Cosimulation(cmd, **locals())
 
 def reversible_LFSR(clk, D, dir, width=4, non_locking=False):
     Rforward, Rreverse = [Signal(bool(0)), Signal(bool(0))]
