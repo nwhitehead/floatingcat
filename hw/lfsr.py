@@ -15,6 +15,11 @@ import sys
 import os
 from combinations import combinations
 
+# Should we cosimulate in Verilog?
+# False means use myhdl
+# True means convert to verilog
+cosimulate = True
+
 # LFSR size limits
 MIN_LFSR_WIDTH = 3
 MAX_LFSR_WIDTH = 64
@@ -32,9 +37,22 @@ TESTED_LEN_REVERSIBLE = range(3, 20)
 
 # This file uses py.test for unit testing
 
+def clockGen(clk):
+    while 1:
+        yield delay(10)
+        clk.next = not clk
+
+
 def test_period():
     '''Test for correct period'''
-    def test(clk, d, width):
+    def test(clk, enable, d, set, dset, width):
+        set.next = True
+        dset.next = intbv(0)[width:]
+        enable.next = False
+        yield posedge(clk)
+        set.next = False
+        enable.next = True
+        yield posedge(clk)
         used = {}
         while True:
             if int(d.val) in used:
@@ -44,39 +62,49 @@ def test_period():
                 assert actual == expected
                 raise StopSimulation
             used[int(d.val)] = 1
-            clk.next = 1
-            yield delay(10)
-            clk.next = 0
-            yield delay(10)
+            yield posedge(clk)
 
     for non_locking, reverse, width in combinations(
         [True, False], [True, False], TESTED_WIDTHS_PERIOD):
-        clk = Signal(bool(0))
+        clk = Signal(False)
+        enable = Signal(False)
         d = Signal(intbv(0)[width:])
-        lfsr = LFSR(clk, d, width=width, 
-            non_locking=non_locking, reverse=reverse)
-        chk = test(clk, d, width)
-        print 'period ', width, non_locking, reverse
-        sim = Simulation(lfsr, chk)
+        set = Signal(False)
+        dset = Signal(intbv(0)[width:])
+        lfsr = LFSR(clk, enable, d, set, dset, width=width, 
+                    non_locking=non_locking, reverse=reverse)
+        chk = test(clk, enable, d, set, dset, width)
+        clkgen_inst = clockGen(clk)
+        print 'period', non_locking, reverse, width
+        sim = Simulation(clkgen_inst, lfsr, chk)
         sim.run(quiet=1)
 
     for non_locking, direction, width in combinations(
         [True, False], [0, 1], TESTED_WIDTHS_PERIOD):
         clk = Signal(bool(0))
+        enable = Signal(False)
         d = Signal(intbv(0)[width:])
+        set = Signal(bool(0))
+        dset = Signal(intbv(0)[width:])
         dir = Signal(bool(direction))
-        lfsr = reversible_LFSR(clk, d, dir, width=width, 
-            non_locking=non_locking)
-        chk = test(clk, d, width)
-        print 'period2 ', width, non_locking, direction
+        lfsr = reversible_LFSR(clk, enable, d, dir, set, dset, width=width, 
+                               non_locking=non_locking)
+        chk = test(clk, enable, d, set, dset, width)
+        print 'period2', non_locking, direction, width
         sim = Simulation(lfsr, chk)
         sim.run(quiet=1)
 
 def test_nonlocking():
     '''Test for lockups'''
-    def test(clk, d, width):
+    def test(clk, enable, d, set, dset, width):
         # Check for 11...1 -> 11...1
-        d.next = intbv(-1)[width:]
+        set.next = True
+        dset.next = intbv(-1)[width:]
+        enable.next = True
+        clk.next = 1
+        yield delay(10)
+        clk.next = 0
+        set.next = False
         yield delay(10)
         clk.next = 1
         yield delay(10)
@@ -84,7 +112,13 @@ def test_nonlocking():
         yield delay(10)
         assert d.val != intbv(-1)[width:]
         # Check for 00...0 -> 00...0
-        d.next = intbv(0)[width:]
+        set.next = True
+        dset.next = intbv(0)[width:]
+        enable.next = True
+        clk.next = 1
+        yield delay(10)
+        clk.next = 0
+        set.next = False
         yield delay(10)
         clk.next = 1
         yield delay(10)
@@ -95,36 +129,55 @@ def test_nonlocking():
 
     for reverse, width in combinations([True, False], TESTED_WIDTHS):
         clk = Signal(bool(0))
+        enable = Signal(True)
         d = Signal(intbv(0)[width:])
-        lfsr = LFSR(clk, d, width=width, 
-            non_locking=True, reverse=reverse)
-        chk = test(clk, d, width)
+        set = Signal(False)
+        dset = Signal(intbv(0)[width:])
+        lfsr = LFSR(clk, enable, d, set, dset, width=width, 
+                    non_locking=True, reverse=reverse)
+        chk = test(clk, enable, d, set, dset, width)
         print 'nonlocking ', width, reverse
         sim = Simulation(lfsr, chk)
         sim.run(quiet=1)
 
     for direction, width in combinations([0, 1], TESTED_WIDTHS):
         clk = Signal(bool(0))
+        enable = Signal(True)
         d = Signal(intbv(0)[width:])
         dir = Signal(bool(direction))
-        lfsr = reversible_LFSR(clk, d, dir, width=width, 
-            non_locking=True)
-        chk = test(clk, d, width)
+        set = Signal(False)
+        dset = Signal(intbv(0)[width:])
+        lfsr = reversible_LFSR(clk, enable, d, dir, set, dset, 
+                               width=width, non_locking=True)
+        chk = test(clk, enable, d, set, dset, width)
         print 'nonlocking2 ', width, direction
         sim = Simulation(lfsr, chk)
         sim.run(quiet=1)
 
 def test_reverse():
     '''Test for correct reversing'''
-    def test(clk, d0, d1, width):
+    def test(clk, enable0, enable1, d0, d1, set0, set1, 
+             dset0, dset1, width):
+        enable0.next = True
+        enable1.next = True
+        set0.next = True
+        set1.next = True
+        dset0.next = intbv(0)[width:]
+        dset1.next = intbv(0)[width:]
+        clk.next = True
+        yield delay(10)
+        set0.next = False
+        set1.next = False
+        clk.next = False
+        yield delay(10)
         seq0 = []
         seq1 = []
         for i in range(2 ** width):
             seq0.append(int(d0.val))
             seq1.append(int(d1.val))
-            clk.next = 1
+            clk.next = True
             yield delay(10)
-            clk.next = 0
+            clk.next = False
             yield delay(10)
         seq1.reverse()
         assert seq0 == seq1
@@ -133,20 +186,37 @@ def test_reverse():
     for non_locking, width in combinations(
         [True, False], TESTED_WIDTHS_PERIOD):
         clk = Signal(bool(0))
+        enable0 = Signal(bool(0))
+        enable1 = Signal(bool(0))
         d0 = Signal(intbv(0)[width:])
         d1 = Signal(intbv(0)[width:])
-        lfsr0 = LFSR(clk, d0, width=width, 
-            non_locking=non_locking, reverse=False)
-        lfsr1 = LFSR(clk, d1, width=width, 
-            non_locking=non_locking, reverse=True)
-        chk = test(clk, d0, d1, width)
-        print 'reverse ', width, non_locking
+        set0 = Signal(bool(0))
+        set1 = Signal(bool(0))
+        dset0 = Signal(intbv(0)[width:])
+        dset1 = Signal(intbv(0)[width:])
+        lfsr0 = LFSR(clk, enable0, d0, set0, dset0, width=width, 
+                     non_locking=non_locking, reverse=False)
+        lfsr1 = LFSR(clk, enable1, d1, set1, dset1, width=width, 
+                     non_locking=non_locking, reverse=True)
+        chk = test(clk, enable0, enable1, d0, d1, 
+                   set0, set1, dset0, dset1, width)
+        print 'reverse ', non_locking, width
         sim = Simulation(lfsr0, lfsr1, chk)
         sim.run(quiet=1)
 
 def test_reversible():
     '''Test for correct reversing behavior in reversible lfsrs'''
-    def test(clk, d, dir, width, l):
+    def test(clk, enable, d, dir, set, dset, width, l):
+        set.next = True
+        dset.next = intbv(0)[width:]
+        enable.next = True
+        clk.next = 1
+        yield delay(10)
+        clk.next = 0
+        set.next = False
+        yield delay(10)
+        clk.next = 1
+        yield delay(10)
         for i in range(l):
             v0 = d.val
             clk.next = 0
@@ -165,12 +235,15 @@ def test_reversible():
         [True, False], [0, 1], 
         TESTED_WIDTHS_REVERSIBLE, TESTED_LEN_REVERSIBLE):
         clk = Signal(bool(0))
+        enable = Signal(bool(0))
         d = Signal(intbv(0)[width:])
         dir = Signal(bool(direction))
-        lfsr = reversible_LFSR(clk, d, dir, width=width, 
-            non_locking=non_locking)
-        chk = test(clk, d, dir, width, l)
-        print 'reversible ', width, non_locking, direction, l
+        set = Signal(bool(0))
+        dset = Signal(intbv(0)[width:])
+        lfsr = reversible_LFSR(clk, enable, d, dir, set, dset, 
+                               width=width, non_locking=non_locking)
+        chk = test(clk, enable, d, dir, set, dset, width, l)
+        print 'reversible ', non_locking, direction, width, l
         sim = Simulation(lfsr, chk)
         sim.run(quiet=1)
 
@@ -324,7 +397,7 @@ def LFSR_bit(D, R, width=4, non_locking=True, reverse=False):
 
     return logic
 
-def LFSR(clk, D, width=4, non_locking=False, reverse=False):
+def LFSR_my(clk, enable, D, set, Dset, width=4, non_locking=False, reverse=False):
     R = Signal(bool(0))
     lfsrbit_inst = LFSR_bit(D, R, width=width, 
         non_locking=non_locking, reverse=reverse)
@@ -332,26 +405,41 @@ def LFSR(clk, D, width=4, non_locking=False, reverse=False):
     if not reverse:
         @always(clk.posedge)
         def logic():
-            for i in range(width - 1):
-                D.next[i + 1] = D[i]
-            D.next[0] = R
+            if set:
+                D.next = Dset
+            else:
+                if enable:
+                    for i in range(width - 1):
+                        D.next[i + 1] = D[i]
+                    D.next[0] = R
     else:
         @always(clk.posedge)
         def logic():
-            for i in range(width - 1):
-                D.next[i] = D[i + 1]
-            D.next[width - 1] = R
+            if set:
+                D.next = Dset
+            else:
+                if enable:
+                    for i in range(width - 1):
+                        D.next[i] = D[i + 1]
+                    D.next[width - 1] = R
 
     return logic, lfsrbit_inst
 
-def LFSR_v(clk, D, width=4, non_locking=False, reverse=False):
-    toVerilog(LFSR, clk, D, width, non_locking, reverse)
-    cmd = "iverilog -o lfsrv LFSR.v tb_LFSR.v"
+def LFSR(*args, **kwargs):
+    print args, kwargs
+    if cosimulate:
+        return LFSR_v(*args, **kwargs)
+    else:
+        return LFSR_my(*args, **kwargs)
+
+def LFSR_v(clk, enable, D, set, Dset, width=4, non_locking=False, reverse=False):
+    toVerilog(LFSR_my, clk, enable, D, set, Dset, width, non_locking, reverse)
+    cmd = "iverilog -o lfsr_v.o LFSR_my.v tb_LFSR_my.v"
     os.system(cmd)
-    cmd = "vvp -m myhdl lfsrv"
+    cmd = "vvp -m myhdl lfsr_v.o"
     return Cosimulation(cmd, **locals())
 
-def reversible_LFSR(clk, D, dir, width=4, non_locking=False):
+def reversible_LFSR(clk, enable, D, dir, set, Dset, width=4, non_locking=False):
     Rforward, Rreverse = [Signal(bool(0)), Signal(bool(0))]
     lfsrbit_inst0 = LFSR_bit(D, Rforward, width=width, 
         non_locking=non_locking, reverse=False)
@@ -360,20 +448,27 @@ def reversible_LFSR(clk, D, dir, width=4, non_locking=False):
 
     @always(clk.posedge)
     def logic():
-        if not dir:
-            for i in range(width - 1):
-                D.next[i + 1] = D[i]
-            D.next[0] = Rforward
+        if set:
+            D.next = Dset
         else:
-            for i in range(width - 1):
-                D.next[i] = D[i + 1]
-            D.next[width - 1] = Rreverse
+            if enable:
+                if not dir:
+                    for i in range(width - 1):
+                        D.next[i + 1] = D[i]
+                    D.next[0] = Rforward
+                else:
+                    for i in range(width - 1):
+                        D.next[i] = D[i + 1]
+                    D.next[width - 1] = Rreverse
 
     return logic, lfsrbit_inst0, lfsrbit_inst1
 
 
 def main(iCLK_50, iKEY, oLEDR):
-    lfsr_inst = LFSR(iKEY, oLEDR, width=5, non_locking=True)
+    set = Signal(False)
+    enable = Signal(True)
+    Dset = Signal(intbv(0)[4:0])
+    lfsr_inst = LFSR(iKEY, enable, oLEDR, set, Dset, width=5, non_locking=True)
     return lfsr_inst
 
 def convert_main():
@@ -383,4 +478,8 @@ def convert_main():
     mn = toVerilog(main, clk, key, led)
 
 if __name__ == '__main__':
+    test_period()
+    test_nonlocking()
+    test_reverse()
+    test_reversible()
     convert_main()
